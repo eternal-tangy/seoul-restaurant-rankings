@@ -1,0 +1,7 @@
+httpx
+pandas
+python-dotenv
+SQLAlchemy
+pytest
+ruff
+black
