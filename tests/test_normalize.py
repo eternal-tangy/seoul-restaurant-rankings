@@ -14,8 +14,8 @@ from src.pipeline.normalize import (
 
 def test_foot_traffic_sums_rows():
     rows = [
-        {"GU_NM": "마포구", "DONG_NM": "도화동", "TOT_LVPOP_CO": "3000"},
-        {"GU_NM": "마포구", "DONG_NM": "도화동", "TOT_LVPOP_CO": "2000"},
+        {"ADSTRD_CODE_SE": "11440680", "TOT_LVPOP_CO": "3000"},
+        {"ADSTRD_CODE_SE": "11440680", "TOT_LVPOP_CO": "2000"},
     ]
     df = normalize_foot_traffic(rows)
     assert df.iloc[0]["foot_traffic"] == 5000.0
@@ -27,7 +27,7 @@ def test_foot_traffic_empty_returns_empty():
 
 
 def test_foot_traffic_invalid_values_treated_as_zero():
-    rows = [{"GU_NM": "마포구", "DONG_NM": "도화동", "TOT_LVPOP_CO": "N/A"}]
+    rows = [{"ADSTRD_CODE_SE": "11440680", "TOT_LVPOP_CO": "N/A"}]
     df = normalize_foot_traffic(rows)
     assert df.iloc[0]["foot_traffic"] == 0.0
 

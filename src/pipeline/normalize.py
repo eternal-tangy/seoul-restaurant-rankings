@@ -11,26 +11,27 @@ import pandas as pd
 # ── Foot traffic (유동인구) ────────────────────────────────────────────────────
 
 FOOT_TRAFFIC_FIELDS = {
-    "GU_NM":        "district",       # 구 이름
-    "DONG_NM":      "neighborhood",   # 동 이름
-    "TOT_LVPOP_CO": "foot_traffic",   # 총 생활인구 수
+    "ADSTRD_CODE_SE": "dong_code",    # 행정동 코드
+    "TOT_LVPOP_CO":   "foot_traffic", # 총 생활인구 수
 }
 
 
 def normalize_foot_traffic(rows: list[dict]) -> pd.DataFrame:
     """
     Collapse all time-slot rows for a dong into a single daily total.
-    The API returns one row per hour/age-band; we sum TOT_LVPOP_CO.
+    The API returns one row per hour per dong code; we sum TOT_LVPOP_CO.
+    Result has columns: dong_code, foot_traffic.
+    district/neighborhood are added by build.py via dong code lookup.
     """
     if not rows:
-        return pd.DataFrame(columns=["district", "neighborhood", "foot_traffic"])
+        return pd.DataFrame(columns=["dong_code", "foot_traffic"])
 
     df = pd.DataFrame(rows)
     df = df.rename(columns={k: v for k, v in FOOT_TRAFFIC_FIELDS.items() if k in df.columns})
     df["foot_traffic"] = pd.to_numeric(df["foot_traffic"], errors="coerce").fillna(0)
 
     return (
-        df.groupby(["district", "neighborhood"], as_index=False)["foot_traffic"]
+        df.groupby("dong_code", as_index=False)["foot_traffic"]
         .sum()
     )
 

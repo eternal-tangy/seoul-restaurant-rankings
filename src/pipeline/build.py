@@ -14,6 +14,7 @@ from src.pipeline.fetch import (
     fetch_card_payment,
     fetch_commercial_district,
     fetch_foot_traffic,
+    get_dong_code,
 )
 from src.pipeline.normalize import (
     minmax,
@@ -57,10 +58,8 @@ def build_dataset(district: str, neighborhood: str) -> pd.DataFrame:
     df = comm.copy()
 
     if not foot.empty:
-        foot_val = foot.loc[
-            (foot["district"] == district) & (foot["neighborhood"] == neighborhood),
-            "foot_traffic",
-        ]
+        dong_code = get_dong_code(district, neighborhood)
+        foot_val = foot.loc[foot["dong_code"] == dong_code, "foot_traffic"]
         df["foot_traffic"] = float(foot_val.iloc[0]) if not foot_val.empty else 0.0
     else:
         df["foot_traffic"] = 0.0

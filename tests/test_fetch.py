@@ -61,12 +61,15 @@ def test_get_raises_on_unexpected_shape():
 
 # ── fetch_foot_traffic ────────────────────────────────────────────────────────
 
-def test_fetch_foot_traffic_filters_by_district_and_neighborhood(tmp_path, monkeypatch):
+def test_fetch_foot_traffic_filters_by_dong_code(tmp_path, monkeypatch):
     monkeypatch.setattr("src.pipeline.fetch.CACHE_DIR", tmp_path)
+    monkeypatch.setitem(
+        __import__("src.pipeline.fetch", fromlist=["DONG_CODES"]).DONG_CODES,
+        "마포구/도화동", "11440680"
+    )
     rows = [
-        {"GU_NM": "마포구", "DONG_NM": "도화동", "TOT_LVPOP_CO": "5000"},
-        {"GU_NM": "마포구", "DONG_NM": "공덕동", "TOT_LVPOP_CO": "3000"},  # different dong
-        {"GU_NM": "용산구", "DONG_NM": "도화동", "TOT_LVPOP_CO": "2000"},  # different gu
+        {"ADSTRD_CODE_SE": "11440680", "TOT_LVPOP_CO": "5000"},  # 도화동
+        {"ADSTRD_CODE_SE": "11440720", "TOT_LVPOP_CO": "3000"},  # 공덕동
     ]
     with patch("httpx.get", return_value=_make_response(SVC_FOOT_TRAFFIC, rows)):
         result = fetch_foot_traffic("마포구", "도화동")
