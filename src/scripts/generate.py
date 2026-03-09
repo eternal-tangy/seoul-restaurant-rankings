@@ -18,6 +18,8 @@ from pathlib import Path
 
 import pandas as pd
 
+from src.pipeline.build import build_with_restaurants
+from src.pipeline.kakao import KakaoPlace
 from src.scoring.score import rank, rank_from_api
 
 OUTPUTS_DIR = Path("outputs")
@@ -191,6 +193,44 @@ def generate_script_from_api(
     )
 
 
+def generate_script_with_kakao(
+    district: str,
+    neighborhood: str,
+    category: str,
+    radius: int = 800,
+) -> str:
+    """
+    Full pipeline using Kakao for real restaurant data.
+    Fetches real restaurant names + addresses from Kakao Local API,
+    scores them using Seoul foot traffic + proximity,
+    and generates a complete video script.
+    """
+    places = build_with_restaurants(district, neighborhood, category, radius)
+
+    restaurants = [
+        Restaurant(name=p.name, address=p.road_address or p.address)
+        for p in places
+    ]
+
+    # Build a synthetic scored DataFrame for rationale generation
+    ranked_df = pd.DataFrame([{
+        "district": district, "neighborhood": neighborhood,
+        "category": category, "store_count": len(places),
+        "foot_traffic": getattr(p, "_score", 1.0),
+        "card_payment": 0.0, "commercial_density": 0.0,
+        "available_sources": "foot_traffic",
+        "score": getattr(p, "_score", 1.0),
+    } for p in places])
+
+    entries = _make_entries(ranked_df, restaurants)
+    return SCRIPT_TEMPLATE.format(
+        category=category,
+        neighborhood=neighborhood,
+        district=district,
+        entries=entries,
+    )
+
+
 def save_script(script: str, district: str, neighborhood: str, category: str) -> Path:
     """Write script to outputs/{district}_{neighborhood}_{category}.md and return the path."""
     OUTPUTS_DIR.mkdir(exist_ok=True)
@@ -213,27 +253,39 @@ if __name__ == "__main__":
     parser.add_argument("--district",     required=True, help="구 이름 e.g. 마포구")
     parser.add_argument("--neighborhood", required=True, help="동 이름 e.g. 도화동")
     parser.add_argument("--category",     required=True, help="업종명 e.g. 일식")
+    parser.add_argument("--kakao",        action="store_true",
+                        help="Use Kakao Local API for real restaurant names (recommended)")
+    parser.add_argument("--radius",       type=int, default=800,
+                        help="Kakao search radius in metres (default: 800)")
     parser.add_argument(
         "--restaurants", nargs="*", metavar="NAME|ADDRESS",
-        help="Up to 5 restaurants as 'name|address' pairs e.g. '스시야|도화동 12-3'",
+        help="Manually specify restaurants as 'name|address' pairs",
     )
     parser.add_argument("--save", action="store_true", help="Save script to outputs/ directory")
     args = parser.parse_args()
 
-    restaurants = [_parse_restaurant(r) for r in (args.restaurants or [])]
-
     try:
-        script = generate_script_from_api(
-            district=args.district,
-            neighborhood=args.neighborhood,
-            category=args.category,
-            restaurants=restaurants or None,
-        )
+        if args.kakao:
+            script = generate_script_with_kakao(
+                district=args.district,
+                neighborhood=args.neighborhood,
+                category=args.category,
+                radius=args.radius,
+            )
+        else:
+            restaurants = [_parse_restaurant(r) for r in (args.restaurants or [])]
+            script = generate_script_from_api(
+                district=args.district,
+                neighborhood=args.neighborhood,
+                category=args.category,
+                restaurants=restaurants or None,
+            )
+
         print(script)
 
         if args.save:
             path = save_script(script, args.district, args.neighborhood, args.category)
-            print(f"\n✓ Saved to {path}")
+            print(f"\nSaved to {path}")
 
-    except ValueError as exc:
+    except (ValueError, EnvironmentError) as exc:
         print(f"Error: {exc}")

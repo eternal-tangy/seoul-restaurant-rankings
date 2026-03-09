@@ -17,6 +17,7 @@ from src.pipeline.fetch import (
     fetch_foot_traffic,
     get_dong_code,
 )
+from src.pipeline.kakao import KakaoPlace, search_restaurants
 from src.pipeline.normalize import (
     minmax,
     normalize_card_payment,
@@ -118,3 +119,59 @@ def build_dataset(district: str, neighborhood: str) -> pd.DataFrame:
     return df[["district", "neighborhood", "category", "store_count",
                "foot_traffic", "card_payment", "commercial_density",
                "available_sources"]]
+
+
+def build_with_restaurants(
+    district: str,
+    neighborhood: str,
+    category: str,
+    radius: int = 800,
+) -> list[KakaoPlace]:
+    """
+    Full pipeline combining Seoul foot traffic score with Kakao restaurant list.
+
+    1. Fetches foot traffic for the dong (Seoul Open Data)
+    2. Fetches real restaurant list from Kakao Local API
+    3. Scores each restaurant using foot traffic + Kakao distance-from-center
+       (closer to the dong center = more embedded in the neighbourhood)
+    4. Returns restaurants sorted best-first
+
+    Args:
+        district:     구 이름 e.g. 마포구
+        neighborhood: 동 이름 e.g. 도화동
+        category:     업종명 e.g. 일식
+        radius:       Kakao search radius in metres (default 800)
+
+    Returns:
+        List of KakaoPlace sorted by composite score (top first).
+    """
+    # 1. Get foot traffic for the dong
+    raw_foot  = _try_fetch(fetch_foot_traffic, district, neighborhood)
+    foot      = normalize_foot_traffic(raw_foot)
+    dong_code = get_dong_code(district, neighborhood)
+
+    foot_val = 0.0
+    if not foot.empty and dong_code:
+        fv = foot.loc[foot["dong_code"] == dong_code, "foot_traffic"]
+        foot_val = float(fv.iloc[0]) if not fv.empty else 0.0
+
+    FOOT_TRAFFIC_REF = 50_000.0
+    foot_score = min(foot_val / FOOT_TRAFFIC_REF, 1.0)
+
+    # 2. Fetch real restaurants from Kakao
+    places = search_restaurants(district, neighborhood, category, radius=radius)
+    if not places:
+        raise ValueError(
+            f"No {category} restaurants found in {neighborhood}, {district} "
+            f"within {radius}m radius."
+        )
+
+    # 3. Score: foot_traffic (area popularity) + proximity (distance score)
+    #    Closer to dong center = higher proximity score
+    max_dist = max(p.distance for p in places) or 1
+    for place in places:
+        proximity    = 1.0 - (place.distance / max_dist)   # [0,1], closer = higher
+        place._score = 0.6 * foot_score + 0.4 * proximity  # type: ignore[attr-defined]
+
+    places.sort(key=lambda p: p._score, reverse=True)      # type: ignore[attr-defined]
+    return places[:5]
