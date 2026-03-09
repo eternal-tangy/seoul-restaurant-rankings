@@ -249,6 +249,11 @@ def _parse_restaurant(value: str) -> Restaurant:
 
 
 if __name__ == "__main__":
+    import sys, io
+    # Fix Windows console UTF-8 output
+    if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+
     parser = argparse.ArgumentParser(description="Generate a YouTube script for top 5 restaurants.")
     parser.add_argument("--district",     required=True, help="구 이름 e.g. 마포구")
     parser.add_argument("--neighborhood", required=True, help="동 이름 e.g. 도화동")
