@@ -13,7 +13,7 @@ import pandas as pd
 
 from src.pipeline.build import build_dataset
 
-# Weights for the composite score (must sum to 1.0)
+# Default weights when all three sources are available (must sum to 1.0)
 WEIGHTS = {
     "foot_traffic":       0.4,
     "card_payment":       0.4,
@@ -21,17 +21,29 @@ WEIGHTS = {
 }
 
 
+def _active_weights(available_sources: str) -> dict[str, float]:
+    """Redistribute weights evenly across available sources."""
+    available = [s.strip() for s in available_sources.split(",") if s.strip()]
+    if not available or available == ["none"]:
+        return WEIGHTS  # fallback — scores will all be 0 anyway
+    base = {k: WEIGHTS[k] for k in available if k in WEIGHTS}
+    total = sum(base.values())
+    return {k: v / total for k, v in base.items()}
+
+
 def compute_scores(df: pd.DataFrame) -> pd.DataFrame:
     """
     Add a composite `score` column and return rows sorted descending.
 
-    Expects columns: foot_traffic, card_payment, commercial_density (all [0, 1]).
+    Weights are redistributed dynamically based on the `available_sources`
+    column so missing APIs don't zero-out all scores.
     """
     df = df.copy()
-    df["score"] = (
-        df["foot_traffic"]       * WEIGHTS["foot_traffic"]
-        + df["card_payment"]     * WEIGHTS["card_payment"]
-        + df["commercial_density"] * WEIGHTS["commercial_density"]
+    sources = df["available_sources"].iloc[0] if "available_sources" in df.columns else ""
+    w = _active_weights(sources)
+
+    df["score"] = sum(
+        df[col] * weight for col, weight in w.items() if col in df.columns
     )
     return df.sort_values("score", ascending=False).reset_index(drop=True)
 

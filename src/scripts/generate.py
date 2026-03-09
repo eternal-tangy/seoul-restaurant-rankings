@@ -77,51 +77,68 @@ ENTRY_TEMPLATE = """\
 
 def _build_rationale(row: pd.Series) -> str:
     """Visitor-friendly description of the signals that drove this category's score."""
-    foot  = row["foot_traffic"]
-    card  = row["card_payment"]
-    dens  = row["commercial_density"]
-    score = row["score"]
-    stores = int(row["store_count"])
+    foot   = row["foot_traffic"]
+    card   = row["card_payment"]
+    dens   = row["commercial_density"]
+    score  = row["score"]
+    stores = int(row.get("store_count", 0))
+    sources = row.get("available_sources", "")
 
     def crowd(v: float) -> str:
         if v >= 0.75: return "always buzzing with locals"
         if v >= 0.4:  return "consistently busy"
         return "a quieter, more relaxed spot"
 
-    def spend(v: float) -> str:
-        if v >= 0.75: return "locals love spending here — a strong sign of quality"
-        if v >= 0.4:  return "solid card payment activity in the area"
-        return "lighter foot spend, but still worth checking out"
+    parts = [f"Overall score: {score:.2f}/1.00."]
+    parts.append(f"This neighbourhood is {crowd(foot)}.")
 
-    def scene(v: float, n: int) -> str:
-        if v >= 0.75: return f"a thriving {n}-restaurant scene with high turnover energy"
-        if v >= 0.4:  return f"a well-established area with {n} options to explore"
-        return f"a smaller, more intimate dining scene ({n} spots)"
+    if "card_payment" in sources and card > 0:
+        if card >= 0.75:
+            parts.append("Card payment data shows locals love spending here — a strong sign of quality.")
+        else:
+            parts.append("Solid card payment activity recorded in the area.")
 
-    return (
-        f"Overall score: {score:.2f}/1.00. "
-        f"This area is {crowd(foot)}, "
-        f"{spend(card)}, "
-        f"and has {scene(dens, stores)}."
-    )
+    if "commercial_density" in sources and stores > 0:
+        if dens >= 0.75:
+            parts.append(f"A thriving dining scene with {stores} restaurants in this category.")
+        elif dens >= 0.4:
+            parts.append(f"A well-established area with {stores} options to explore.")
+        else:
+            parts.append(f"A more intimate dining scene with {stores} spots.")
+
+    return " ".join(parts)
 
 
 def _make_entries(ranked: pd.DataFrame, restaurants: list[Restaurant] | None) -> str:
+    """
+    Build script entries for up to 5 restaurants.
+    - If restaurants are provided, iterate over them (up to 5).
+    - Use the first ranked row's rationale for all entries when scores are equal
+      (e.g. foot-traffic-only mode where all categories score the same).
+    - Fall back to placeholders for any missing restaurant names.
+    """
+    n = max(len(restaurants) if restaurants else 0, min(len(ranked), 5))
+    n = max(n, 5)  # always show 5 slots
+    base_row = ranked.iloc[0] if not ranked.empty else None
+
     entries = []
-    for i, (_, row) in enumerate(ranked.iterrows()):
+    for i in range(n):
+        row = ranked.iloc[i] if i < len(ranked) else base_row
+
         if restaurants and i < len(restaurants):
             name    = restaurants[i].name
             address = restaurants[i].address
         else:
             name    = f"[Restaurant {i + 1} — fill in name]"
-            address = f"[Address — fill in address]"
+            address = "[Address — fill in address]"
 
+        rationale = _build_rationale(row) if row is not None else ""
         entries.append(
             ENTRY_TEMPLATE.format(
                 rank=i + 1,
                 name=name,
                 address=address,
-                rationale=_build_rationale(row),
+                rationale=rationale,
             )
         )
     return "\n".join(entries)

@@ -39,8 +39,9 @@ def test_build_rationale_high_foot_traffic_label():
 
 
 def test_build_rationale_low_commercial_density_label():
-    row = pd.Series(_scored_row(commercial_density=0.1))
-    assert "smaller, more intimate dining scene" in _build_rationale(row)
+    row = pd.Series({**_scored_row(commercial_density=0.1),
+                     "available_sources": "foot_traffic,commercial_density"})
+    assert "more intimate dining scene" in _build_rationale(row)
 
 
 # ── _make_entries ─────────────────────────────────────────────────────────────
