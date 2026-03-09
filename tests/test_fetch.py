@@ -94,7 +94,7 @@ def test_fetch_foot_traffic_uses_cache(tmp_path, monkeypatch):
 def test_fetch_card_payment_returns_rows(tmp_path, monkeypatch):
     from src.pipeline.fetch import SVC_CARD_PAYMENT
     monkeypatch.setattr("src.pipeline.fetch.CACHE_DIR", tmp_path)
-    rows = [{"GU_NM": "마포구", "DONG_NM": "도화동", "THSMON_SELNG_AMT": "10000000"}]
+    rows = [{"ADSTRD_CD": "11440585", "STDR_YYQU_CD": "20253", "FD_EXPNDTR_TOTAMT": "10000000"}]
     with patch("httpx.get", return_value=_make_response(SVC_CARD_PAYMENT, rows)):
         result = fetch_card_payment("마포구", "도화동")
     assert len(result) == 1
@@ -105,7 +105,7 @@ def test_fetch_card_payment_returns_rows(tmp_path, monkeypatch):
 def test_fetch_commercial_district_returns_rows(tmp_path, monkeypatch):
     from src.pipeline.fetch import SVC_COMMERCIAL_DISTRICT
     monkeypatch.setattr("src.pipeline.fetch.CACHE_DIR", tmp_path)
-    rows = [{"GU_NM": "마포구", "DONG_NM": "도화동", "SVC_INDUTY_NM": "일식", "STOR_CO": "12"}]
+    rows = [{"ADSTRD_CD": "11440585", "STDR_YYQU_CD": "20253", "SVC_INDUTY_CD_NM": "일식음식점", "STOR_CO": "12"}]
     with patch("httpx.get", return_value=_make_response(SVC_COMMERCIAL_DISTRICT, rows)):
         result = fetch_commercial_district("마포구", "도화동")
-    assert result[0]["SVC_INDUTY_NM"] == "일식"
+    assert result[0]["SVC_INDUTY_CD_NM"] == "일식음식점"

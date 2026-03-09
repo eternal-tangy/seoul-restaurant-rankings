@@ -36,70 +36,86 @@ def normalize_foot_traffic(rows: list[dict]) -> pd.DataFrame:
     )
 
 
-# ── Card payment (소득·소비) ───────────────────────────────────────────────────
+# ── Card payment (소득·소비) OA-22166 ─────────────────────────────────────────
+# Uses dining-out expenditure (외식비) as the proxy for restaurant card spend.
+# Data has multiple quarterly rows per dong; we use the most recent quarter.
 
 CARD_PAYMENT_FIELDS = {
-    "GU_NM":           "district",
-    "DONG_NM":         "neighborhood",
-    "THSMON_SELNG_AMT": "card_payment",   # 당월 매출 금액
+    "ADSTRD_CD":        "dong_code",
+    "STDR_YYQU_CD":     "quarter",
+    "FD_EXPNDTR_TOTAMT": "card_payment",   # 외식비 지출 총액 (dining-out expenditure)
 }
 
 
 def normalize_card_payment(rows: list[dict]) -> pd.DataFrame:
     """
-    Sum monthly sales amount across all industry codes for the dong.
+    Return one row per dong with the most-recent quarter's dining expenditure.
     """
     if not rows:
-        return pd.DataFrame(columns=["district", "neighborhood", "card_payment"])
+        return pd.DataFrame(columns=["dong_code", "card_payment"])
 
     df = pd.DataFrame(rows)
     df = df.rename(columns={k: v for k, v in CARD_PAYMENT_FIELDS.items() if k in df.columns})
     df["card_payment"] = pd.to_numeric(df["card_payment"], errors="coerce").fillna(0)
 
-    return (
-        df.groupby(["district", "neighborhood"], as_index=False)["card_payment"]
-        .sum()
-    )
+    # Keep only the most recent quarter per dong
+    latest = df.sort_values("quarter", ascending=False).groupby("dong_code", as_index=False).first()
+    return latest[["dong_code", "card_payment"]]
 
 
-# ── Commercial district (상권분석 점포) ────────────────────────────────────────
+# ── Commercial district (상권분석 점포) OA-22172 ───────────────────────────────
+# Industry names like "일식음식점" are mapped to our standard category names.
 
 COMMERCIAL_FIELDS = {
-    "GU_NM":         "district",
-    "DONG_NM":       "neighborhood",
-    "SVC_INDUTY_NM": "category",           # 업종명 e.g. 일식, 한식
-    "STOR_CO":       "store_count",        # 점포 수
-    "OPBIZ_RT":      "open_rate",          # 개업률
-    "CLSBIZ_RT":     "close_rate",         # 폐업률
+    "ADSTRD_CD":        "dong_code",
+    "STDR_YYQU_CD":     "quarter",
+    "SVC_INDUTY_CD_NM": "category",    # 업종명 e.g. "일식음식점", "커피-음료"
+    "STOR_CO":          "store_count", # 점포 수
+    "OPBIZ_RT":         "open_rate",   # 개업률
+    "CLSBIZ_RT":        "close_rate",  # 폐업률
+}
+
+# Maps API category names → our standard names
+CATEGORY_NAME_MAP: dict[str, str] = {
+    "한식음식점":  "한식",
+    "중식음식점":  "중식",
+    "일식음식점":  "일식",
+    "양식음식점":  "양식",
+    "분식전문점":  "분식",
+    "치킨전문점":  "치킨",
+    "피자전문점":  "피자",
+    "패스트푸드":  "패스트푸드",
+    "커피-음료":   "카페",
+    "호프-간이주점": "이자카야",
 }
 
 
 def normalize_commercial_district(rows: list[dict]) -> pd.DataFrame:
     """
-    Return one row per (district, neighborhood, category) with store activity metrics.
+    Return one row per (dong_code, category) using the most recent quarter.
     commercial_density = store_count * (1 + open_rate - close_rate)
+    Categories are mapped to our standard names via CATEGORY_NAME_MAP.
     """
     if not rows:
-        return pd.DataFrame(columns=["district", "neighborhood", "category", "store_count", "commercial_density"])
+        return pd.DataFrame(columns=["dong_code", "category", "store_count", "commercial_density"])
 
     df = pd.DataFrame(rows)
     df = df.rename(columns={k: v for k, v in COMMERCIAL_FIELDS.items() if k in df.columns})
 
+    # Keep only the most recent quarter
+    df = df.sort_values("quarter", ascending=False)
+    df = df.groupby(["dong_code", "category"], as_index=False).first()
+
+    # Map to standard category names; drop unmapped categories
+    df["category"] = df["category"].map(CATEGORY_NAME_MAP)
+    df = df.dropna(subset=["category"])
+
     for col in ["store_count", "open_rate", "close_rate"]:
-        if col in df.columns:
-            df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
-        else:
-            df[col] = 0
+        df[col] = pd.to_numeric(df.get(col, 0), errors="coerce").fillna(0)
 
     df["commercial_density"] = df["store_count"] * (1 + df["open_rate"] - df["close_rate"])
 
-    return (
-        df.groupby(["district", "neighborhood", "category"], as_index=False)
-        .agg(
-            store_count=("store_count", "sum"),
-            commercial_density=("commercial_density", "sum"),
-        )
-    )
+    return df[["dong_code", "category", "store_count", "commercial_density"]]
 
 
 # ── Min-max normalizer ────────────────────────────────────────────────────────

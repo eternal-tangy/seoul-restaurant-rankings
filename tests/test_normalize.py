@@ -34,13 +34,14 @@ def test_foot_traffic_invalid_values_treated_as_zero():
 
 # ── normalize_card_payment ────────────────────────────────────────────────────
 
-def test_card_payment_sums_rows():
+def test_card_payment_returns_most_recent_quarter():
     rows = [
-        {"GU_NM": "마포구", "DONG_NM": "도화동", "THSMON_SELNG_AMT": "5000000"},
-        {"GU_NM": "마포구", "DONG_NM": "도화동", "THSMON_SELNG_AMT": "3000000"},
+        {"ADSTRD_CD": "11440585", "STDR_YYQU_CD": "20244", "FD_EXPNDTR_TOTAMT": "3000000"},
+        {"ADSTRD_CD": "11440585", "STDR_YYQU_CD": "20251", "FD_EXPNDTR_TOTAMT": "5000000"},
     ]
     df = normalize_card_payment(rows)
-    assert df.iloc[0]["card_payment"] == 8_000_000.0
+    assert len(df) == 1
+    assert df.iloc[0]["card_payment"] == 5_000_000.0
 
 
 def test_card_payment_empty_returns_empty():
@@ -53,8 +54,8 @@ def test_card_payment_empty_returns_empty():
 def test_commercial_district_computes_density():
     rows = [
         {
-            "GU_NM": "마포구", "DONG_NM": "도화동",
-            "SVC_INDUTY_NM": "일식",
+            "ADSTRD_CD": "11440585", "STDR_YYQU_CD": "20253",
+            "SVC_INDUTY_CD_NM": "일식음식점",
             "STOR_CO": "10", "OPBIZ_RT": "0.2", "CLSBIZ_RT": "0.1",
         }
     ]
@@ -65,9 +66,9 @@ def test_commercial_district_computes_density():
 
 def test_commercial_district_groups_by_category():
     rows = [
-        {"GU_NM": "마포구", "DONG_NM": "도화동", "SVC_INDUTY_NM": "일식",
+        {"ADSTRD_CD": "11440585", "STDR_YYQU_CD": "20253", "SVC_INDUTY_CD_NM": "일식음식점",
          "STOR_CO": "5", "OPBIZ_RT": "0.1", "CLSBIZ_RT": "0.05"},
-        {"GU_NM": "마포구", "DONG_NM": "도화동", "SVC_INDUTY_NM": "한식",
+        {"ADSTRD_CD": "11440585", "STDR_YYQU_CD": "20253", "SVC_INDUTY_CD_NM": "한식음식점",
          "STOR_CO": "20", "OPBIZ_RT": "0.3", "CLSBIZ_RT": "0.1"},
     ]
     df = normalize_commercial_district(rows)

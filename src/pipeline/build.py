@@ -65,32 +65,36 @@ def build_dataset(district: str, neighborhood: str) -> pd.DataFrame:
     comm = normalize_commercial_district(raw_commercial)
 
     # 3. Build base DataFrame from commercial data or fallback categories
-    if not comm.empty:
-        df = comm.copy()
+    dong_code = get_dong_code(district, neighborhood)
+
+    if not comm.empty and dong_code:
+        df = comm.loc[comm["dong_code"] == dong_code].copy()
+        if df.empty:
+            df = None
     else:
+        df = None
+
+    if df is None or df.empty:
         print(f"  [warn] No commercial district data — using default categories.")
         df = pd.DataFrame({
-            "district":     district,
-            "neighborhood": neighborhood,
+            "dong_code":    dong_code or "",
             "category":     DEFAULT_CATEGORIES,
             "store_count":  0,
             "commercial_density": 0.0,
         })
 
-    # 4. Broadcast dong-level signals to all category rows
-    dong_code = get_dong_code(district, neighborhood)
+    df["district"]     = district
+    df["neighborhood"] = neighborhood
 
+    # 4. Broadcast dong-level signals to all category rows
     if not foot.empty and dong_code:
         foot_val = foot.loc[foot["dong_code"] == dong_code, "foot_traffic"]
         df["foot_traffic"] = float(foot_val.iloc[0]) if not foot_val.empty else 0.0
     else:
         df["foot_traffic"] = 0.0
 
-    if not card.empty:
-        card_val = card.loc[
-            (card["district"] == district) & (card["neighborhood"] == neighborhood),
-            "card_payment",
-        ]
+    if not card.empty and dong_code:
+        card_val = card.loc[card["dong_code"] == dong_code, "card_payment"]
         df["card_payment"] = float(card_val.iloc[0]) if not card_val.empty else 0.0
     else:
         df["card_payment"] = 0.0
